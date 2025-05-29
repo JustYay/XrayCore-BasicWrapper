@@ -43,7 +43,7 @@ IOS_VERSION=14.0
 ANDROID_API=24
 
 LDFLAGS='-s -w -extldflags -lresolv'
-IMPORT_PATH=github.com/lestar348/xray-core-mobile-wrapper
+IMPORT_PATH=github.com/JustYay/XrayCore-BasicWrapper
 
 BUILD_GOMOBILE = "cd $(BUILDDIR) && git clone $(GOMOBILE_REPO) && cd $(BUILDDIR_GOMOBILE) && git checkout $(GOMOBILE_TV_OS_BRANCH) && cd $(BUILDDIR_GOMOBILE_CMD) && go build -o $(GOMOBILE)"
 

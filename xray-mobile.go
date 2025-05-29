@@ -12,7 +12,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	_ "github.com/lestar348/xray-core-mobile-wrapper/all_core_packages"
+	_ "github.com/JustYay/XrayCore-BasicWrapper/all_core_packages"
 
 	xrayNet "github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/core"
