@@ -15,16 +15,7 @@ ARROW=→
 BUILDING=🔨
 PACKAGE=📦
 
-GOMOBILE_REPO = https://github.com/protonjohn/gomobile.git
-GOMOBILE_TV_OS_BRANCH = pr/jkb/add-tvos-xros-support
-
 BUILDDIR=$(shell pwd)/build
-BUILDDIR_GOMOBILE=$(BUILDDIR)/gomobile
-BUILDDIR_GOMOBILE_CMD=$(BUILDDIR_GOMOBILE)/cmd/gomobile
-
-GOMOBILE=$(BUILDDIR)/gomobile_with_tvos
-GOBIND=$(GOMOBILE) bind
-
 BUILDDIR_IOS=$(BUILDDIR)/ios
 BUILDDIR_MACOS=$(BUILDDIR)/macos
 BUILDDIR_ANDROID=$(BUILDDIR)/android
@@ -33,11 +24,8 @@ APPLE_ARTIFACT=$(BUILDDIR)/XRayCoreIOSWrapper.xcframework
 ANDROID_ARTIFACT=$(BUILDDIR)/xray.aar
 
 IOS_TARGET=ios/arm64
-TV_OS_TARGET=appletvos
-TV_OS_SIMULATOR_TARGET=appletvsimulator
 IOS_SIMULATOR_TARGET=iossimulator
 MACOS_TARGET=macos
-MACOSX_TARGET=maccatalyst
 
 IOS_VERSION=14.0
 ANDROID_API=24
@@ -45,105 +33,121 @@ ANDROID_API=24
 LDFLAGS='-s -w -extldflags -lresolv'
 IMPORT_PATH=github.com/JustYay/XrayCore-BasicWrapper
 
-BUILD_GOMOBILE = "cd $(BUILDDIR) && git clone $(GOMOBILE_REPO) && cd $(BUILDDIR_GOMOBILE) && git checkout $(GOMOBILE_TV_OS_BRANCH) && cd $(BUILDDIR_GOMOBILE_CMD) && go build -o $(GOMOBILE)"
-
-BUILD_ANDROID="cd $(BUILDDIR_ANDROID) && $(GOBIND) -v -androidapi $(ANDROID_API) -ldflags='-s -w' $(IMPORT_PATH)"
-
-BUILD_IOS="cd $(BUILDDIR) && $(GOBIND) -a -ldflags $(LDFLAGS) -target=$(IOS_TARGET),$(IOS_SIMULATOR_TARGET) -o $(APPLE_ARTIFACT) $(IMPORT_PATH)"
-BUILD_IOS_SIMULATOR="cd $(BUILDDIR) && $(GOBIND) -a -ldflags $(LDFLAGS) -target=$(IOS_SIMULATOR_TARGET) -o $(APPLE_ARTIFACT) $(IMPORT_PATH)" 
-
-BUILD_MACOS ="cd $(BUILDDIR) && $(GOBIND) -a -ldflags $(LDFLAGS) -target=$(MACOS_TARGET) -o $(APPLE_ARTIFACT) $(IMPORT_PATH)" 
-
-BUILD_ALL_APPLE_PLATFORMS = "cd $(BUILDDIR) && $(GOBIND) -a -ldflags $(LDFLAGS) -target=$(TV_OS_TARGET),$(TV_OS_SIMULATOR_TARGET),$(IOS_TARGET),$(IOS_SIMULATOR_TARGET),$(MACOS_TARGET) -o $(APPLE_ARTIFACT) $(IMPORT_PATH)"
-
 # Функция для красивого вывода
 define log_info
-	@echo "$(CYAN)$(ARROW) $(1)$(NC)"
+	echo "$(CYAN)$(ARROW) $(1)$(NC)"
 endef
 
 define log_success
-	@echo "$(GREEN)$(CHECK) $(1)$(NC)"
+	echo "$(GREEN)$(CHECK) $(1)$(NC)"
 endef
 
 define log_error
-	@echo "$(RED)$(CROSS) $(1)$(NC)"
+	echo "$(RED)$(CROSS) $(1)$(NC)"
 endef
 
 define log_building
-	@echo "$(YELLOW)$(BUILDING) $(1)$(NC)"
+	echo "$(YELLOW)$(BUILDING) $(1)$(NC)"
 endef
 
 define log_package
-	@echo "$(PURPLE)$(PACKAGE) $(1)$(NC)"
+	echo "$(PURPLE)$(PACKAGE) $(1)$(NC)"
 endef
 
 define print_header
-	@echo ""
-	@echo "$(WHITE)╔══════════════════════════════════════════════════════════════╗$(NC)"
-	@echo "$(WHITE)║                    XRay Core Mobile Wrapper                  ║$(NC)"
-	@echo "$(WHITE)║                        Build System                          ║$(NC)"
-	@echo "$(WHITE)╚══════════════════════════════════════════════════════════════╝$(NC)"
-	@echo ""
+	echo ""
+	echo "$(WHITE)╔══════════════════════════════════════════════════════════════╗$(NC)"
+	echo "$(WHITE)║                    XRay Core Mobile Wrapper                  ║$(NC)"
+	echo "$(WHITE)║                        Build System                          ║$(NC)"
+	echo "$(WHITE)╚══════════════════════════════════════════════════════════════╝$(NC)"
+	echo ""
 endef
 
-gomobiletvos:
-	$(call print_header)
-	$(call log_info, "Подготовка среды сборки...")
+setup:
+	@$(call print_header)
+	@$(call log_info,Настройка среды разработки...)
+	@$(call log_building,Проверка Go версии...)
+	@go version || { $(call log_error,Go не установлен! Установите Go 1.20+); exit 1; }
+	@$(call log_building,Установка gomobile...)
+	@go install golang.org/x/mobile/cmd/gomobile@latest && \
+		$(call log_success,gomobile установлен!) || \
+		$(call log_error,Ошибка установки gomobile)
+	@$(call log_building,Установка gobind...)
+	@go install golang.org/x/mobile/cmd/gobind@latest && \
+		$(call log_success,gobind установлен!) || \
+		$(call log_error,Ошибка установки gobind)
+	@$(call log_building,Установка mobile bind пакета...)
+	@go get golang.org/x/mobile/bind && \
+		$(call log_success,mobile bind пакет установлен!) || \
+		$(call log_error,Ошибка установки mobile bind)
+	@$(call log_building,Инициализация gomobile...)
+	@export PATH=$$PATH:$$HOME/go/bin && gomobile init && \
+		$(call log_success,gomobile инициализирован!) || \
+		$(call log_error,Ошибка инициализации gomobile)
+	@$(call log_building,Обновление зависимостей проекта...)
+	@go mod tidy && \
+		$(call log_success,Зависимости обновлены!) || \
+		$(call log_error,Ошибка обновления зависимостей)
+	@$(call log_success,Среда разработки готова! Теперь можно запускать make ios или make android)
+
+all: setup ios android
+	@$(call log_package,Сборка завершена! Все платформы готовы.)
+
+ios: check-setup
+	@$(call print_header)
+	@$(call log_info,Начинаю сборку для iOS...)
 	@mkdir -p $(BUILDDIR)
-	$(call log_building, "Клонирование и сборка gomobile с поддержкой tvOS...")
-	@eval $(BUILD_GOMOBILE) && $(call log_success, "gomobile успешно собран!") || $(call log_error, "Ошибка сборки gomobile")
+	@$(call log_building,Компиляция iOS framework...)
+	@export PATH=$$PATH:$$HOME/go/bin && \
+		gomobile bind -v -target=ios -o $(APPLE_ARTIFACT) -ldflags $(LDFLAGS) $(IMPORT_PATH) && \
+		$(call log_success,iOS framework успешно собран!) || \
+		$(call log_error,Ошибка сборки iOS)
+	@$(call log_package,iOS артефакт: $(APPLE_ARTIFACT))
 
-all: clean gomobiletvos allapple 
-	$(call log_package, "Сборка завершена! Все платформы готовы.")
+macos: check-setup
+	@$(call print_header)
+	@$(call log_info,Начинаю сборку для macOS...)
+	@mkdir -p $(BUILDDIR)
+	@$(call log_building,Компиляция macOS framework...)
+	@export PATH=$$PATH:$$HOME/go/bin && \
+		gomobile bind -v -target=macos -o $(APPLE_ARTIFACT) -ldflags $(LDFLAGS) $(IMPORT_PATH) && \
+		$(call log_success,macOS framework успешно собран!) || \
+		$(call log_error,Ошибка сборки macOS)
+	@$(call log_package,macOS артефакт: $(APPLE_ARTIFACT))
 
-allapple:
-	$(call log_building, "Сборка для всех Apple платформ (iOS, tvOS, macOS)...")
-	@eval $(BUILD_ALL_APPLE_PLATFORMS) && $(call log_success, "Apple платформы успешно собраны!") || $(call log_error, "Ошибка сборки Apple платформ")
-	$(call log_package, "Артефакт: $(APPLE_ARTIFACT)")
-
-ios:
-	$(call print_header)
-	$(call log_info, "Начинаю сборку для iOS...")
-	@$(MAKE) gomobiletvos
-	@mkdir -p $(BUILDDIR_IOS)
-	$(call log_building, "Компиляция iOS framework...")
-	@eval $(BUILD_IOS) && $(call log_success, "iOS framework успешно собран!") || $(call log_error, "Ошибка сборки iOS")
-	$(call log_package, "iOS артефакт: $(APPLE_ARTIFACT)")
-
-macos:
-	$(call print_header)
-	$(call log_info, "Начинаю сборку для macOS...")
-	@$(MAKE) gomobiletvos
-	@mkdir -p $(BUILDDIR_MACOS)
-	$(call log_building, "Компиляция macOS framework...")
-	@eval $(BUILD_MACOS) && $(call log_success, "macOS framework успешно собран!") || $(call log_error, "Ошибка сборки macOS")
-	$(call log_package, "macOS артефакт: $(APPLE_ARTIFACT)")
-
-android:
-	$(call print_header)
-	$(call log_info, "Начинаю сборку для Android...")
-	$(call log_building, "Проверка gomobile...")
-	@command -v gomobile >/dev/null 2>&1 || { $(call log_error, "gomobile не найден. Установите: go install golang.org/x/mobile/cmd/gomobile@latest"); exit 1; }
+android: check-setup
+	@$(call print_header)
+	@$(call log_info,Начинаю сборку для Android...)
 	@mkdir -p $(BUILDDIR_ANDROID)
-	$(call log_building, "Компиляция Android AAR...")
-	@eval $(BUILD_ANDROID) && $(call log_success, "Android AAR успешно собран!") || $(call log_error, "Ошибка сборки Android")
-	$(call log_package, "Android артефакт: $(ANDROID_ARTIFACT)")
+	@$(call log_building,Компиляция Android AAR...)
+	@export PATH=$$PATH:$$HOME/go/bin && \
+		cd $(BUILDDIR_ANDROID) && \
+		gomobile bind -v -target=android -androidapi $(ANDROID_API) -o xray.aar -ldflags='-s -w' $(IMPORT_PATH) && \
+		$(call log_success,Android AAR успешно собран!) || \
+		$(call log_error,Ошибка сборки Android)
+	@$(call log_package,Android артефакт: $(BUILDDIR_ANDROID)/xray.aar)
+
+check-setup:
+	@export PATH=$$PATH:$$HOME/go/bin && command -v gomobile >/dev/null 2>&1 || { \
+		$(call log_error,gomobile не найден! Запустите: make setup); \
+		exit 1; \
+	}
 
 clean:
-	$(call log_info, "Очистка директории сборки...")
+	@$(call log_info,Очистка директории сборки...)
 	@rm -rf $(BUILDDIR)
-	$(call log_success, "Директория сборки очищена!")
+	@$(call log_success,Директория сборки очищена!)
 
-.PHONY: help
+.PHONY: help setup check-setup
 help:
-	$(call print_header)
+	@$(call print_header)
 	@echo "$(CYAN)Доступные команды:$(NC)"
 	@echo ""
+	@echo "  $(YELLOW)make setup$(NC)      - Настроить среду разработки (первый запуск)"
 	@echo "  $(YELLOW)make ios$(NC)        - Собрать для iOS"
 	@echo "  $(YELLOW)make macos$(NC)      - Собрать для macOS"
 	@echo "  $(YELLOW)make android$(NC)    - Собрать для Android"
-	@echo "  $(YELLOW)make allapple$(NC)   - Собрать для всех Apple платформ"
-	@echo "  $(YELLOW)make all$(NC)        - Собрать для всех платформ"
+	@echo "  $(YELLOW)make all$(NC)        - Настроить среду и собрать для всех платформ"
 	@echo "  $(YELLOW)make clean$(NC)      - Очистить директорию сборки"
 	@echo "  $(YELLOW)make help$(NC)       - Показать эту справку"
 	@echo ""
@@ -152,4 +156,9 @@ help:
 	@echo "  • HTTP/2, QUIC, KCP"
 	@echo "  • $(GREEN)SplitHTTP$(NC) (новый!)"
 	@echo "  • Reality, TLS"
+	@echo ""
+	@echo "$(CYAN)Быстрый старт:$(NC)"
+	@echo "  1. $(YELLOW)make setup$(NC)   - Настроить среду (только один раз)"
+	@echo "  2. $(YELLOW)make ios$(NC)     - Собрать для iOS"
+	@echo "  3. $(YELLOW)make android$(NC) - Собрать для Android"
 	@echo ""
