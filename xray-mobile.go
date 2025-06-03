@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"time"
 
@@ -27,18 +28,36 @@ type Logger interface {
 
 var coreInstance *core.Instance
 
+// Константа для жесткого ограничения памяти в 50МБ
+const HARD_MEMORY_LIMIT = MEMORY_LIMIT_50MB // Используем константу из memory_manager.go
+
+// init автоматически устанавливает жесткое ограничение памяти при загрузке пакета
+func init() {
+	// Устанавливаем жесткое ограничение памяти в 50МБ
+	debug.SetMemoryLimit(HARD_MEMORY_LIMIT)
+	// Устанавливаем более агрессивную сборку мусора для экономии памяти
+	debug.SetGCPercent(AGGRESSIVE_GC_PERCENT)
+}
+
 // Sets the limit on memory consumption by a process.
 // Also set garbage collection target percentage
+// ВНИМАНИЕ: Эта функция переопределена для принудительного ограничения в 50МБ
 func SetMemoryLimit(byteLimit int64, garbageCollectionTargetPercentage int) {
+	// Принудительно ограничиваем максимальный лимит до 50МБ
+	if byteLimit > HARD_MEMORY_LIMIT {
+		byteLimit = HARD_MEMORY_LIMIT
+	}
 	debug.SetGCPercent(garbageCollectionTargetPercentage)
 	debug.SetMemoryLimit(byteLimit)
 }
 
 // Removes the memory usage limit
 // and returns the garbage collector frequency to the default
+// ВНИМАНИЕ: Эта функция переопределена для сохранения ограничения в 50МБ
 func RemoveMemoryLimit() {
+	// Не позволяем полностью убрать ограничение - максимум 50МБ
 	debug.SetGCPercent(100)
-	debug.SetMemoryLimit(math.MaxInt64)
+	debug.SetMemoryLimit(HARD_MEMORY_LIMIT)
 }
 
 // Ser AssetsDirectory in Xray env
@@ -65,6 +84,12 @@ func SetXrayEnv(key string, path string) {
 }
 
 func StartXray(config []byte, logger Logger) error {
+	// Принудительно устанавливаем ограничение памяти в 50МБ перед запуском
+	EnforceMemoryLimit(logger)
+	
+	// Выводим подробную статистику памяти
+	LogMemoryStats(logger)
+	
 	conf, err := serial.DecodeJSONConfig(bytes.NewReader(config))
 	if err != nil {
 		logger.LogInput("Config load error: " + err.Error())
@@ -87,6 +112,10 @@ func StartXray(config []byte, logger Logger) error {
 	}
 
 	coreInstance = instance
+	
+	// Проверяем память после запуска
+	CheckMemoryAndCleanup(logger)
+	
 	return nil
 }
 
@@ -94,8 +123,57 @@ func StopXray() {
 	coreInstance.Close()
 }
 
+// GetMemoryUsage возвращает информацию об использовании памяти
+func GetMemoryUsage() (currentMB int64, limitMB int64, isWithinLimit bool) {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	
+	currentBytes := int64(m.Alloc)
+	currentMB = currentBytes / (1024 * 1024)
+	limitMB = HARD_MEMORY_LIMIT / (1024 * 1024)
+	isWithinLimit = currentBytes <= HARD_MEMORY_LIMIT
+	
+	return currentMB, limitMB, isWithinLimit
+}
+
+// ForceGarbageCollection принудительно запускает сборку мусора для освобождения памяти
+func ForceGarbageCollection() {
+	runtime.GC()
+	debug.FreeOSMemory()
+}
+
+// CheckMemoryAndCleanup проверяет использование памяти и при необходимости очищает её
+func CheckMemoryAndCleanup(logger Logger) {
+	currentMB, limitMB, isWithinLimit := GetMemoryUsage()
+	
+	if logger != nil {
+		logger.LogInput(fmt.Sprintf("Использование памяти: %d МБ из %d МБ", currentMB, limitMB))
+	}
+	
+	if !isWithinLimit {
+		if logger != nil {
+			logger.LogInput("ВНИМАНИЕ: Превышен лимит памяти! Запуск принудительной очистки...")
+		}
+		ForceGarbageCollection()
+		
+		// Проверяем снова после очистки
+		currentMB, _, isWithinLimit = GetMemoryUsage()
+		if logger != nil {
+			if isWithinLimit {
+				logger.LogInput(fmt.Sprintf("Память очищена. Текущее использование: %d МБ", currentMB))
+			} else {
+				logger.LogInput(fmt.Sprintf("КРИТИЧНО: Не удалось освободить достаточно памяти! Текущее использование: %d МБ", currentMB))
+			}
+		}
+	}
+}
+
 // / Real ping
 func MeasureOutboundDelay(config []byte, url string) (int64, error) {
+	// Принудительно устанавливаем ограничение памяти перед тестом
+	debug.SetMemoryLimit(HARD_MEMORY_LIMIT)
+	debug.SetGCPercent(AGGRESSIVE_GC_PERCENT)
+	
 	conf, err := serial.DecodeJSONConfig(bytes.NewReader(config))
 	if err != nil {
 		return -1, err
@@ -117,6 +195,12 @@ func MeasureOutboundDelay(config []byte, url string) (int64, error) {
 	}
 
 	inst.Start()
+	defer func() {
+		inst.Close()
+		// Принудительная очистка памяти после теста
+		ForceGarbageCollection()
+	}()
+	
 	return measureInstDelay(context.Background(), inst, url)
 }
 
