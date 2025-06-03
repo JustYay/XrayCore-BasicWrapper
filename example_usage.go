@@ -1,11 +1,9 @@
-package main
+package XRay
 
 import (
 	"fmt"
 	"log"
 	"time"
-	
-	XRay "github.com/JustYay/XrayCore-BasicWrapper"
 )
 
 // Простой логгер для примера
@@ -15,7 +13,8 @@ func (l *SimpleLogger) LogInput(s string) {
 	log.Printf("[XRay] %s", s)
 }
 
-func main() {
+// DemoMemorySystem демонстрирует работу системы ограничения памяти
+func DemoMemorySystem() {
 	logger := &SimpleLogger{}
 	
 	// Демонстрация системы ограничения памяти
@@ -23,22 +22,22 @@ func main() {
 	
 	// 1. Проверяем текущее состояние памяти
 	fmt.Println("\n1. Начальное состояние памяти:")
-	XRay.LogMemoryStats(logger)
+	LogMemoryStats(logger)
 	
 	// 2. Принудительно устанавливаем лимит
 	fmt.Println("\n2. Принудительная установка лимита:")
-	XRay.EnforceMemoryLimit(logger)
+	EnforceMemoryLimit(logger)
 	
 	// 3. Получаем базовую статистику
 	fmt.Println("\n3. Базовая статистика памяти:")
-	currentMB, limitMB, isWithinLimit := XRay.GetMemoryUsage()
+	currentMB, limitMB, isWithinLimit := GetMemoryUsage()
 	fmt.Printf("Текущее использование: %d МБ\n", currentMB)
 	fmt.Printf("Лимит: %d МБ\n", limitMB)
 	fmt.Printf("В пределах лимита: %t\n", isWithinLimit)
 	
 	// 4. Получаем подробную статистику
 	fmt.Println("\n4. Подробная статистика памяти:")
-	stats := XRay.GetDetailedMemoryStats()
+	stats := GetDetailedMemoryStats()
 	fmt.Printf("Выделено: %d МБ\n", stats.AllocatedMB)
 	fmt.Printf("Всего выделялось: %d МБ\n", stats.TotalAllocMB)
 	fmt.Printf("Системная память: %d МБ\n", stats.SystemMB)
@@ -46,7 +45,7 @@ func main() {
 	
 	// 5. Запускаем мониторинг памяти
 	fmt.Println("\n5. Запуск фонового мониторинга памяти...")
-	stopMonitor := XRay.StartMemoryMonitor(logger)
+	stopMonitor := StartMemoryMonitor(logger)
 	
 	// Ждем немного, чтобы увидеть работу мониторинга
 	time.Sleep(35 * time.Second)
@@ -57,8 +56,8 @@ func main() {
 	
 	// 7. Принудительная очистка памяти
 	fmt.Println("\n7. Принудительная очистка памяти:")
-	XRay.ForceGarbageCollection()
-	XRay.LogMemoryStats(logger)
+	ForceGarbageCollection()
+	LogMemoryStats(logger)
 	
 	fmt.Println("\n=== ДЕМОНСТРАЦИЯ ЗАВЕРШЕНА ===")
-} 
+}
